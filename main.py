@@ -46,12 +46,20 @@ def main(event, context):
          event (dict): Event payload.
          context (google.cloud.functions.Context): Metadata for the event.
     """
+    api = setup_api()
     character = pickup_character()
     (character, text) = get_generated_words(character)
-    status_text = "%s「%s」" % (character, text)
-    post_tweet(status_text)
-    print(status_text)
+    status_text = "%s\n「%s」" % (character, text)
+    post_tweet(api, status_text)
+    update_profile_image(api, character)
     return
+
+
+def setup_api():
+    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+    auth.set_access_token(access_token, access_secret)
+    api = tweepy.API(auth, retry_count=2, retry_delay=5)
+    return api
 
 
 def pickup_character():
@@ -64,12 +72,17 @@ def get_generated_words(character):
     headers = {'content-type': 'application/json'}
     payload = {"character": character}
     response = requests.post(generator_url, headers=headers, data=json.dumps(payload))
+    if response.status_code != 200:
+        raise Exception("generate-words returned status_code %d" % response.status_code)
     (character, text) = json.loads(response.text)
     return (character, text)
 
 
-def post_tweet(status_text):
-    auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-    auth.set_access_token(access_token, access_secret)
-    api = tweepy.API(auth, retry_count=2, retry_delay=5)
+def post_tweet(api, status_text):
     return api.update_status(status_text)
+
+
+def update_profile_image(api, character):
+    path = "icons/%s.png" % character
+    api.update_profile_image(path)
+    return
